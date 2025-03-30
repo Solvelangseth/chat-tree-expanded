@@ -1,4 +1,15 @@
 // Function to save headers to chrome.storage
+const subchatRelations = new Map<string, { parentMessageId: string; tabId: number }>();
+
+// Load existing subchat relations from storage
+chrome.storage.local.get(['subchatRelations'], (result) => {
+  if (result.subchatRelations) {
+    Object.entries(result.subchatRelations).forEach(([key, value]) => {
+      subchatRelations.set(key, value as { parentMessageId: string; tabId: number });
+    });
+  }
+});
+
 function saveRequestHeaders(headers: chrome.webRequest.HttpHeader[]) {
   chrome.storage.session.set({ storedRequestHeaders: headers }, () => {
     if (chrome.runtime.lastError) {
@@ -62,6 +73,17 @@ chrome.runtime.onMessage.addListener(
         .catch(error => {
           sendResponse({ success: false, error: error.message });
         });
+      return true;
+    }
+    else if (request.action === "createSubchat") {
+      (async () => {
+        try {
+          const result = await handleCreateSubchat(request.parentMessageId);
+          sendResponse(result);
+        } catch (error: any) {
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
       return true;
     }
     else if (request.action === "checkNodes") {
@@ -741,3 +763,37 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
+
+// Add new handler functions
+async function handleCreateSubchat(parentMessageId: string) {
+  const subchatId = `subchat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Store relationship
+  subchatRelations.set(subchatId, {
+    parentMessageId,
+    tabId: -1  // Will be updated when tab is created
+  });
+  
+  // Persist to storage
+  await chrome.storage.local.set({ subchatRelations: Object.fromEntries(subchatRelations) });
+  
+  return { success: true, subchatId };
+}
+
+// Add tab creation listener
+chrome.tabs.onCreated.addListener(async (tab) => {
+  if (tab.url?.includes('subchat_parent')) {
+    const urlParams = new URL(tab.url).searchParams;
+    const parentMessageId = urlParams.get('subchat_parent');
+    const subchatId = urlParams.get('subchat_id');
+
+    if (parentMessageId && subchatId) {
+      // Update relationship with new tab ID
+      const relation = subchatRelations.get(subchatId);
+      if (relation) {
+        relation.tabId = tab.id!;
+        await chrome.storage.local.set({ subchatRelations: Object.fromEntries(subchatRelations) });
+      }
+    }
+  }
+});

@@ -115,6 +115,24 @@ export const ContextMenu = (props: ContextMenuProps) => {
         }
     };
 
+    const startSubchat = async () => {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                action: "createSubchat",
+                parentMessageId: props.messageId,
+            });
+
+            if (response.success) {
+                chrome.tabs.create({
+                    url: `https://chatgpt.com/?subchat_parent=${props.messageId}&subchat_id=${response.subchatId}`,
+                    active: true
+                });
+            }
+        } catch (error) {
+            console.error('Error starting subchat:', error);
+        }
+    };
+
     // Render helpers
     const getPositionStyle = () => ({
         position: 'absolute' as const,
@@ -150,6 +168,12 @@ export const ContextMenu = (props: ContextMenuProps) => {
                         {props.role === 'user' ? 'Edit this message' : 'Respond to this message'}
                     </button>
                 )}
+                <button 
+                    className="w-full px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-50 rounded transition-colors" 
+                    onClick={startSubchat}
+                >
+                    Start Subchat
+                </button>
                 {showInput && (
                     <div className="mt-2">
                         <div className="relative flex flex-col">

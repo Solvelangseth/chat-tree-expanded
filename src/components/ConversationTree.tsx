@@ -42,8 +42,25 @@ const ConversationTree = () => {
     if (conversationData) {
       createNodesInOrder(conversationData, checkNodes)
         .then(({ nodes: newNodes, edges: newEdges }) => {
-          setNodes(newNodes as any);
-          setEdges(newEdges as any);
+          // Add subchat relationship checking
+          chrome.storage.local.get(['subchatRelations'], (result) => {
+            const relations = result.subchatRelations || {};
+            Object.entries(relations).forEach(([subchatId, relation]) => {
+              const typedRelation = relation as { parentMessageId: string; tabId: number };
+              const parentNode = newNodes.find(n => n.id === typedRelation.parentMessageId);
+              if (parentNode) {
+                newEdges.push({
+                  id: `subchat-edge-${parentNode.id}-${subchatId}`,
+                  source: parentNode.id,
+                  target: subchatId,
+                  type: 'smoothstep',
+                  style: { strokeDasharray: '5,5' }
+                });
+              }
+            });
+            setNodes(newNodes as any);
+            setEdges(newEdges as any);
+          });
           setIsLoading(false);
         })
         .catch(error => {
