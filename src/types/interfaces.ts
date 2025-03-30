@@ -71,18 +71,7 @@ export interface Message {
 export interface Node {
     position: { x: number; y: number };
     id: string;
-    data?: { 
-        label: string; 
-        role?: string; 
-        timestamp?: number, 
-        id?: string, 
-        hidden?: boolean, 
-        contentType?: string, 
-        model_slug?: string,
-        isSubchat?: boolean,
-        subchatId?: string,
-        parentMessageId?: string
-    };
+    data?: { label: string; role?: string; timestamp?: number, id?: string, hidden?: boolean, contentType?: string, model_slug?: string};
     message: Message | null;
     parent: string | null;
     children: string[];
@@ -152,5 +141,4 @@ export interface ContextMenuProps {
     onNodeClick: (messageId: string) => any[];
     onRefresh: () => void;
     refreshNodes: () => void;
-    tabId?: number;
 }

@@ -1,11 +1,18 @@
 // Function to save headers to chrome.storage
-const subchatRelations = new Map<string, { parentMessageId: string; tabId: number }>();
+interface SubchatContext {
+  parentMessageId: string;
+  mainChatHistory: any[];  // Messages up to the parent message
+  subchatId: string;
+  tabId: number;
+}
 
-// Load existing subchat relations from storage
-chrome.storage.local.get(['subchatRelations'], (result) => {
-  if (result.subchatRelations) {
-    Object.entries(result.subchatRelations).forEach(([key, value]) => {
-      subchatRelations.set(key, value as { parentMessageId: string; tabId: number });
+const subchatContexts = new Map<string, SubchatContext>();
+
+// Load existing subchat contexts from storage
+chrome.storage.local.get(['subchatContexts'], (result) => {
+  if (result.subchatContexts) {
+    Object.entries(result.subchatContexts).forEach(([key, value]) => {
+      subchatContexts.set(key, value as SubchatContext);
     });
   }
 });
@@ -768,16 +775,68 @@ chrome.sidePanel
 async function handleCreateSubchat(parentMessageId: string) {
   const subchatId = `subchat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   
-  // Store relationship
-  subchatRelations.set(subchatId, {
+  // Get the main chat's history up to the parent message
+  const mainChatHistory = await getMainChatHistory(parentMessageId);
+  
+  // Store the context
+  subchatContexts.set(subchatId, {
     parentMessageId,
+    mainChatHistory,
+    subchatId,
     tabId: -1  // Will be updated when tab is created
   });
   
   // Persist to storage
-  await chrome.storage.local.set({ subchatRelations: Object.fromEntries(subchatRelations) });
+  await chrome.storage.local.set({ 
+    subchatContexts: Object.fromEntries(subchatContexts) 
+  });
   
   return { success: true, subchatId };
+}
+
+async function getMainChatHistory(parentMessageId: string) {
+  try {
+    const response = await fetchConversationHistory();
+    if (!response.success) return [];
+    
+    // Find the path to the parent message
+    const path = findPathToMessage(response.data, parentMessageId);
+    if (!path) return [];
+    
+    // Return the messages up to the parent message
+    return path;
+  } catch (error) {
+    console.error('Error getting main chat history:', error);
+    return [];
+  }
+}
+
+function findPathToMessage(data: any, targetId: string): any[] {
+  const messages: any[] = [];
+  
+  function traverse(node: any): boolean {
+    messages.push(node);
+    
+    if (node.id === targetId) {
+      return true;
+    }
+    
+    for (const childId of node.children || []) {
+      if (traverse(data.mapping[childId])) {
+        return true;
+      }
+    }
+    
+    messages.pop();
+    return false;
+  }
+  
+  const root = Object.values(data.mapping).find((node: any) => !node.parent);
+  if (root) {
+    traverse(root);
+  }
+  
+  return messages;
 }
 
 // Add tab creation listener
@@ -789,10 +848,10 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 
     if (parentMessageId && subchatId) {
       // Update relationship with new tab ID
-      const relation = subchatRelations.get(subchatId);
+      const relation = subchatContexts.get(subchatId);
       if (relation) {
         relation.tabId = tab.id!;
-        await chrome.storage.local.set({ subchatRelations: Object.fromEntries(subchatRelations) });
+        await chrome.storage.local.set({ subchatContexts: Object.fromEntries(subchatContexts) });
       }
     }
   }

@@ -24,7 +24,10 @@
         "sidePanel"
     ],
     "host_permissions": [
-        "https://chatgpt.com/backend-api/*"
+        "https://chatgpt.com/backend-api/*",
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*"
+
     ],
     "content_security_policy": {
         "extension_pages": "script-src 'self'; object-src 'self';"
